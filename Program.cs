@@ -85,3 +85,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Teste de commit com o email configurado corretamente
