@@ -58,7 +58,22 @@ public class AberturasController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Created($"/api/Aberturas/{novaAbertura.Id}", novaAbertura); // HTTP 201 (Exigência da Rubrica)
+    }// GET: api/Aberturas/5 (Buscar apenas uma abertura)
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetAberturaPorId(int id)
+    {
+        var usuarioId = ObterUsuarioIdLogado();
+
+        // Busca no banco a abertura com este ID, MAS SÓ se for do usuário logado!
+        var abertura = await _context.Aberturas
+            .FirstOrDefaultAsync(a => a.Id == id && a.UsuarioId == usuarioId);
+
+        if (abertura == null)
+            return NotFound(new { erro = "Abertura não encontrada ou não pertence a você." }); // HTTP 404
+
+        return Ok(abertura); // HTTP 200
     }
+
 
     // DELETE: api/Aberturas/5
     [HttpDelete("{id}")]

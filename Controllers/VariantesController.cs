@@ -74,6 +74,16 @@ public class VariantesController : ControllerBase
         return Created($"/api/Variantes/{novaVariante.Id}", novaVariante);
     }
 
+    // GET: api/Variantes
+    [HttpGet]
+    public async Task<IActionResult> GetTodasAsVariantes()
+    {
+        // Busca todas as variantes cadastradas no banco
+        var variantes = await _context.Variantes.ToListAsync();
+        
+        return Ok(variantes); // HTTP 200
+    }
+
     // DELETE: api/Variantes/5
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletarVariante(int id)
