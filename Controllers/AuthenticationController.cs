@@ -12,7 +12,7 @@ namespace LivroAberturasAPI.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthenticationController : ControllerBase
+public class AuthenticationController : ControllerBaseCustomizado
 {
     private readonly AppDbContext _context;
     private readonly IConfiguration _configuration;

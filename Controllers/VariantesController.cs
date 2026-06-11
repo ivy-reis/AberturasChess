@@ -4,14 +4,13 @@ using LivroAberturasAPI.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace LivroAberturasAPI.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
 [Authorize] // 🔒 Protege o controller inteiro
-public class VariantesController : ControllerBase
+public class VariantesController : ControllerBaseCustomizado
 {
     private readonly AppDbContext _context;
 
@@ -20,20 +19,48 @@ public class VariantesController : ControllerBase
         _context = context;
     }
 
-    // Método Auxiliar: Pega o ID de dentro do Token
-    private int ObterUsuarioIdLogado()
+    // ==========================================
+    // LER (GET): Busca TODAS as variantes do usuário logado
+    // ==========================================
+    [HttpGet]
+    public async Task<IActionResult> GetMinhasVariantes()
     {
-        var idString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        return int.Parse(idString!);
+        var usuarioId = ObterUsuarioIdLogado();
+
+        var variantes = await _context.Variantes
+            .Include(v => v.Abertura)
+            .Where(v => v.Abertura!.UsuarioId == usuarioId)
+            .ToListAsync();
+            
+        return Ok(variantes);
     }
 
-    // GET: api/Variantes/abertura/5 (Busca as variantes de uma abertura específica)
+    // ==========================================
+    // LER (GET): Busca uma variante específica pelo ID
+    // ==========================================
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetVariantePorId(int id)
+    {
+        var usuarioId = ObterUsuarioIdLogado();
+
+        var variante = await _context.Variantes
+            .Include(v => v.Abertura)
+            .FirstOrDefaultAsync(v => v.Id == id && v.Abertura!.UsuarioId == usuarioId);
+
+        if (variante == null) 
+            return NotFound(new { erro = "Variante não encontrada ou acesso negado." });
+
+        return Ok(variante);
+    }
+
+    // ==========================================
+    // LER (GET): Busca as variantes de uma abertura específica
+    // ==========================================
     [HttpGet("abertura/{aberturaId}")]
     public async Task<IActionResult> GetVariantesDaAbertura(int aberturaId)
     {
         var usuarioId = ObterUsuarioIdLogado();
 
-        // SEGURANÇA: Verifica se a abertura pertence ao usuário logado ANTES de mostrar as variantes
         var aberturaExiste = await _context.Aberturas
             .AnyAsync(a => a.Id == aberturaId && a.UsuarioId == usuarioId);
 
@@ -42,19 +69,19 @@ public class VariantesController : ControllerBase
 
         var variantes = await _context.Variantes
             .Where(v => v.AberturaId == aberturaId)
-            // .Include(v => v.Partidas) // Descomente se quiser trazer o histórico de partidas junto
             .ToListAsync();
 
         return Ok(variantes);
     }
 
-    // POST: api/Variantes
+    // ==========================================
+    // CRIAR (POST)
+    // ==========================================
     [HttpPost]
     public async Task<IActionResult> CriarVariante(VarianteDTO dto)
     {
         var usuarioId = ObterUsuarioIdLogado();
 
-        // SEGURANÇA CRÍTICA: O usuário não pode injetar uma variante na abertura de outro jogador!
         var abertura = await _context.Aberturas
             .FirstOrDefaultAsync(a => a.Id == dto.AberturaId && a.UsuarioId == usuarioId);
 
@@ -65,7 +92,7 @@ public class VariantesController : ControllerBase
         {
             AberturaId = dto.AberturaId,
             Nome = dto.Nome,
-            Lances = dto.Lances // Adicionei essa propriedade imaginando a sua modelagem, ajuste se precisar!
+            Lances = dto.Lances 
         };
 
         _context.Variantes.Add(novaVariante);
@@ -74,33 +101,47 @@ public class VariantesController : ControllerBase
         return Created($"/api/Variantes/{novaVariante.Id}", novaVariante);
     }
 
-    // GET: api/Variantes
-    [HttpGet]
-    public async Task<IActionResult> GetTodasAsVariantes()
+    // ==========================================
+    // ATUALIZAR (PUT)
+    // ==========================================
+    [HttpPut("{id}")]
+    public async Task<IActionResult> EditarVariante(int id, VarianteDTO dto)
     {
-        // Busca todas as variantes cadastradas no banco
-        var variantes = await _context.Variantes.ToListAsync();
-        
-        return Ok(variantes); // HTTP 200
+        var usuarioId = ObterUsuarioIdLogado();
+
+        var variante = await _context.Variantes
+            .Include(v => v.Abertura)
+            .FirstOrDefaultAsync(v => v.Id == id && v.Abertura!.UsuarioId == usuarioId);
+
+        if (variante == null) 
+            return NotFound(new { erro = "Variante não encontrada ou sem permissão." });
+
+        variante.Nome = dto.Nome;
+        variante.Lances = dto.Lances;
+
+        await _context.SaveChangesAsync();
+        return Ok(variante);
     }
 
-    // DELETE: api/Variantes/5
+    // ==========================================
+    // DELETAR (DELETE)
+    // ==========================================
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletarVariante(int id)
     {
         var usuarioId = ObterUsuarioIdLogado();
 
-        // Busca a variante INCLUINDO a Abertura pai para checar quem é o dono
         var variante = await _context.Variantes
             .Include(v => v.Abertura)
-            .FirstOrDefaultAsync(v => v.Id == id && v.Abertura.UsuarioId == usuarioId);
+            .FirstOrDefaultAsync(v => v.Id == id && v.Abertura!.UsuarioId == usuarioId);
 
         if (variante == null)
             return NotFound(new { erro = "Variante não encontrada ou não pertence a você." });
 
+        // Removida a trava de partidas. Deleção em cascata ativada!
         _context.Variantes.Remove(variante);
         await _context.SaveChangesAsync();
 
-        return NoContent(); // Retorna 204 sem conteúdo, exigência da rubrica
+        return NoContent(); // HTTP 204
     }
 }
